@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: mediastream:; connect-src 'self' https://*.wikipedia.org https://commons.wikimedia.org https://hn.algolia.com https://api.openverse.org https://archive.org https://api.duckduckgo.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: mediastream: https:; connect-src 'self' https://*.wikipedia.org https://commons.wikimedia.org https://hn.algolia.com https://api.openverse.org https://archive.org https://api.duckduckgo.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src https:; child-src https:; worker-src 'none'">
 <meta name="robots" content="noindex">
 <meta name="description" content="GH0ST//SEEK — an experimental anti-surveillance search engine that finds alternative sites and turns the web into a psychedelic visual synthesizer.">
 <meta name="theme-color" content="#000000">
@@ -22,6 +22,7 @@
   <div class="gateInner">
     <h2 id="gateTitle" class="drip">⚠ WARNING ⚠</h2>
     <p>This page flashes, strobes and melts. If you are sensitive to flashing lights, choose <b>CALM</b>.</p>
+    <p class="small">Results are unfiltered (toggle the safe filter in the synth rack → ENGINE).</p>
     <p class="small">No cookies. No analytics. No storage. No server. Your queries go straight from your browser to open APIs with the referrer stripped — every request is shown in the 🛡 log.</p>
     <div class="gateBtns">
       <button id="enterCalm" class="btn sticker">ENTER · CALM</button>
@@ -47,9 +48,11 @@
       <button data-mode="all" class="mode on">WEB</button>
       <button data-mode="alt" class="mode">ALT SITES</button>
       <button data-mode="img" class="mode">IMAGES</button>
+      <button data-mode="video" class="mode">VIDEO</button>
       <button data-mode="archive" class="mode">ARCHIVE</button>
       <button data-mode="hn" class="mode">LINKS</button>
       <button data-mode="engines" class="mode">ESCAPE TO…</button>
+      <button id="openBrowser" class="mode">⧉ BROWSER</button>
       <button data-mode="me" class="mode">WHAT THEY SEE</button>
     </nav>
     <div id="engineBar" aria-label="Open this query elsewhere"></div>
@@ -61,7 +64,7 @@
   <footer id="foot">
     <p>GH0ST//SEEK is a static page on GitHub Pages. It has no backend, sets no cookies and stores nothing. Results come live from
       Wikipedia, Wikimedia Commons, DuckDuckGo instant answers, the HN Algolia index, Openverse and the Internet Archive. Screenshots via thum.io are opt-in per session.
-      Keys: <kbd>H</kbd> hide UI · <kbd>C</kbd> chaos · <kbd>R</kbd> record loop · <kbd>Space</kbd> burst · <kbd>1-8</kbd> source A · <kbd>⇧1-8</kbd> source B · <kbd>A</kbd> autopilot · <kbd>D</kbd> dérive · <kbd>S</kbd> snapshot · <kbd>F</kbd> fullscreen · <kbd>/</kbd> search</p>
+      Keys: <kbd>H</kbd> hide UI · <kbd>C</kbd> chaos · <kbd>R</kbd> record loop · <kbd>Space</kbd> burst · <kbd>1-8</kbd> source A · <kbd>⇧1-8</kbd> source B · <kbd>A</kbd> autopilot · <kbd>D</kbd> dérive · <kbd>S</kbd> snapshot · <kbd>F</kbd> fullscreen · <kbd>B</kbd> browser · <kbd>/</kbd> search</p>
   </footer>
 </div>
 
@@ -110,6 +113,7 @@
         <label>QUALITY <select id="quality"><option value="0.5">LO</option><option value="0.75" selected>MID</option><option value="1">HI</option></select></label>
         <label>UI ALPHA <input id="uiAlpha" type="range" min="0.15" max="1" step="0.01" value="0.92"></label>
         <label class="chk"><input id="autoFeed" type="checkbox" checked> AUTO-FEED RESULTS</label>
+        <label class="chk"><input id="safeFilter" type="checkbox"> SAFE FILTER (images)</label>
       </div>
     </div>
     <div id="groups"></div>
@@ -126,6 +130,55 @@
     <button id="logToSynth" class="btn small">FEED LOG TO SYNTH</button>
   </div>
 </div>
+
+<section id="browser" class="pane" hidden aria-label="GH0ST browser">
+  <div class="bbar">
+    <b class="ptitle">GH0ST BROWSER</b>
+    <button id="bBack" class="btn small" title="back">◀</button>
+    <button id="bFwd" class="btn small" title="forward">▶</button>
+    <button id="bReload" class="btn small" title="reload">↻</button>
+    <input id="bAddr" type="text" spellcheck="false" autocomplete="off" placeholder="URL or words…" aria-label="Address">
+    <select id="bSearcher" aria-label="search with"><option>MARGINALIA</option><option>WIBY</option><option>WIKIPEDIA</option><option>OPENSTREETMAP</option></select>
+    <button id="bGo" class="btn small">GO</button>
+    <button id="bClose" class="btn small hot" title="close">✕</button>
+  </div>
+  <div class="bbar fx">
+    <button id="bCapture" class="btn small" title="live-capture this frame into the synth">PAGE → SYNTH</button>
+    <button id="bWarp" class="btn small" title="tilt the page in 3D">3D WARP</button>
+    <button id="bMelt" class="btn small" title="liquid psychedelic filter">MELT</button>
+    <button id="bBlend" class="btn small" title="blend the page with the synth">BLEND: NORMAL</button>
+    <button id="bJs" class="btn small" title="block page scripts">JS: ON</button>
+    <button id="bArchive" class="btn small">ARCHIVE</button>
+    <button id="bMax" class="btn small">MAX</button>
+    <button id="bExt" class="btn small" title="open in a real tab">↗</button>
+  </div>
+  <div id="bNote" class="bnote"></div>
+  <div class="bstage"><iframe id="bFrame" title="GH0ST browser frame" src="about:blank"></iframe></div>
+</section>
+
+<section id="deck" class="pane" hidden aria-label="Video deck">
+  <div class="bbar">
+    <b class="ptitle">VIDEO DECK</b><span id="deckTitle"></span>
+    <button id="dClose" class="btn small hot">✕</button>
+  </div>
+  <video id="deckVideo" controls playsinline></video>
+  <div class="bbar">
+    <button id="dFeed" class="btn small">FEED → SYNTH</button>
+    <button id="dCap" class="btn small" title="screen-capture the player">CAPTURE</button>
+    <button id="dScratch" class="btn small">SCRATCH</button>
+    <button id="dAudio" class="btn small" title="soundtrack drives the visuals">AUDIO → FX</button>
+    <label>SPEED <select id="dSpeed"><option>0.25</option><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option><option>4</option></select></label>
+  </div>
+</section>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="melt" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.008 0.02" numOctaves="2" seed="3" result="n">
+      <animate attributeName="baseFrequency" dur="9s" values="0.008 0.02;0.02 0.006;0.008 0.02" repeatCount="indefinite"/>
+    </feTurbulence>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="38" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
 
 <div id="toast" role="status"></div>
 <input type="file" id="file" accept="image/*,video/*" multiple hidden>

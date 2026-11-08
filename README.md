@@ -21,7 +21,17 @@ You type, it searches in real time, sprays your query as graffiti, screenshots t
   frontends (Invidious, xcancel/Nitter, Redlib, Scribe, BreezeWiki… via farside.link) or archives.
 - Full offline directory under **ALT SITES**.
 
+## GH0ST browser & video deck
+- **⧉ BROWSER** (`B`): browse inside the page in a credentialless, referrer-less, sandboxed frame with an optional **NO-JS** mode.
+  YouTube/Vimeo links become privacy embeds (youtube-nocookie). Sites that refuse framing get archive / frontend / new-tab escape routes.
+  **3D WARP**, **MELT** (liquid SVG displacement + hue cycling), **BLEND** (page × synth blend modes) and **PAGE → SYNTH** (live region capture).
+- **VIDEO** mode: Wikimedia Commons videos (fed straight into the synth) + Internet Archive films (captured).
+  The deck can **SCRATCH**, change speed, and route the soundtrack into the audio-reactive FX. Direct `.mp4/.webm` links play too.
+- Results are unfiltered by default; a SAFE FILTER toggle lives in the rack. Escape links turn engine safe-search off; Ahmia (Tor) added.
+
 ## Visual synthesizer
+- **3D WORLDS:** the synth output becomes the texture of raymarched spaces: TUNNEL, TERRAIN (luminance heightfield fly-over),
+  ORB (displaced mirror sphere), CUBE CITY, FRACTAL — with depth, fly speed, twist, lens, fog, and 3D → feedback recursion.
 - 8-slot **source bank**: graffiti tag wall (repainted on every keystroke), a live "screenshot" of the
   results page, result thumbnails, **SHOT** (opt-in website screenshots), **live tab/screen capture**,
   webcam, files, pasted screenshots (Ctrl+V) and **SELF ∞** (the output fed back into itself).

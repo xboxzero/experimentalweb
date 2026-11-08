@@ -1,6 +1,6 @@
 // Sound: a drone that follows the visuals, keystrokes become notes, the mic can drive the image.
 export class Sound {
-  constructor() { this.ctx = null; this.on = false; this.level = 0; this.analyser = null; this.micStream = null; }
+  constructor() { this.ctx = null; this.on = false; this.level = 0; this.analyser = null; this.micStream = null; this.inputs = 0; this.media = new WeakMap(); }
 
   _ensure() {
     if (this.ctx) return;
@@ -17,6 +17,18 @@ export class Sound {
     });
     this.lfo = ctx.createOscillator(); this.lfo.frequency.value = 0.13;
     const lg = ctx.createGain(); lg.gain.value = 400; this.lfo.connect(lg); lg.connect(this.filter.frequency); this.lfo.start();
+    this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 512;
+    this.buf = new Uint8Array(this.analyser.frequencyBinCount);
+  }
+
+  // route a <video>/<audio> element's sound into the analyser (drives the visuals) and the speakers
+  async connectMedia(el) {
+    this._ensure(); await this.ctx.resume();
+    if (this.media.has(el)) return true;
+    const src = this.ctx.createMediaElementSource(el);
+    src.connect(this.analyser); src.connect(this.ctx.destination);
+    this.media.set(el, src); this.inputs++;
+    return true;
   }
 
   toggle() {
@@ -62,18 +74,16 @@ export class Sound {
 
   async mic() {
     this._ensure();
-    if (this.micStream) { this.micStream.getTracks().forEach(t => t.stop()); this.micStream = null; this.analyser = null; this.level = 0; return false; }
+    if (this.micStream) { this.micStream.getTracks().forEach(t => t.stop()); this.micStream = null; this.micSrc.disconnect(); this.inputs--; return false; }
     this.micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } });
     await this.ctx.resume();
-    const src = this.ctx.createMediaStreamSource(this.micStream);
-    this.analyser = this.ctx.createAnalyser(); this.analyser.fftSize = 512;
-    src.connect(this.analyser);
-    this.buf = new Uint8Array(this.analyser.frequencyBinCount);
+    this.micSrc = this.ctx.createMediaStreamSource(this.micStream);
+    this.micSrc.connect(this.analyser); this.inputs++;
     return true;
   }
 
   read() {
-    if (!this.analyser) return this.level *= 0.9;
+    if (!this.analyser || this.inputs <= 0) return this.level *= 0.9;
     this.analyser.getByteFrequencyData(this.buf);
     let s = 0; for (let i = 2; i < 64; i++) s += this.buf[i];
     const v = Math.min(1, s / (62 * 160));

@@ -4,6 +4,7 @@ import * as S from './search.js';
 import { ALTS, findAlts, looksLikeUrl, cleanUrl, reroute, altsForHost } from './alts.js';
 import { makeCanvas, paintTag, paintSerp, paintText, paintNoise, fontsReady } from './paint.js';
 import { Sound } from './audio.js';
+import { GhostBrowser, VideoDeck } from './browser.js';
 
 const $ = (s) => document.querySelector(s);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -25,9 +26,9 @@ function h(tag, attrs = {}, ...kids) {
   return el;
 }
 
-const state = { mode: 'all', q: null, lastMode: null, gen: 0, ctrl: null, items: [], images: [], auto: false, derive: null, shotConsent: false, calm: false, autoFeed: true, midi: null, learn: null, ccMap: {} };
+const state = { filter: false, mode: 'all', q: null, lastMode: null, gen: 0, ctrl: null, items: [], images: [], auto: false, derive: null, shotConsent: false, calm: false, autoFeed: true, midi: null, learn: null, ccMap: {} };
 const input = $('#q'), results = $('#results'), statusEl = $('#status');
-let synth = null;
+let synth = null, browser = null, deck = null;
 const sound = new Sound();
 
 // ---------------------------------------------------------------- toast
@@ -217,8 +218,13 @@ async function runSearch(force) {
   } else if (mode === 'img') {
     const g = section('IMAGES — OPEN LICENSED, CLICK TO FEED THE SYNTH', 'grid');
     const takeImgs = (items) => { if (!keep()) return; items.forEach(it => g.append(imgCard(it))); state.items.push(...items); autoFeedItems(items, 3); scheduleSerp(); };
-    track('OPENVERSE', S.openverse(q, ctrl.signal)).then(takeImgs).catch(() => { });
+    track('OPENVERSE', S.openverse(q, ctrl.signal, state.filter)).then(takeImgs).catch(() => { });
     track('COMMONS', S.commons(q, ctrl.signal)).then(takeImgs).catch(() => { });
+  } else if (mode === 'video') {
+    const g = section('VIDEO — PLAY IT, FEED IT, SCRATCH IT', 'main');
+    const takeV = (items) => { if (!keep()) return; items.forEach(it => g.append(card(it))); state.items.push(...items); autoFeedItems(items, 2); scheduleSerp(); };
+    track('COMMONS VIDEO', S.commonsVideos(q, ctrl.signal)).then(takeV).catch(() => { });
+    track('ARCHIVE FILMS', S.archiveMovies(q, ctrl.signal)).then(takeV).catch(() => { });
   } else if (mode === 'archive') {
     const g = section('THE INTERNET ARCHIVE — NOTHING DIES', 'main');
     track('ARCHIVE', S.archive(q, ctrl.signal)).then(items => { if (!keep()) return; items.forEach(it => g.append(card(it))); state.items.push(...items); scheduleSerp(); }).catch(() => { });
@@ -261,7 +267,9 @@ function card(it) {
   let thumb = null;
   if (it.thumb) { thumb = thumbImg(it); c.append(h('div', { class: 'thumb' }, thumb)); }
   const acts = h('div', { class: 'acts' },
-    h('a', { href: it.url, class: 'act', text: 'OPEN' }),
+    it.video || it.ia ? h('button', { class: 'act hotact', text: '▶ PLAY', title: 'play in the video deck', onclick: () => playItem(it) }) : null,
+    h('button', { class: 'act', text: 'BROWSE', title: 'open inside GH0ST browser', onclick: () => browser.open(it.url) }),
+    h('a', { href: it.url, class: 'act', text: '↗', title: 'real tab' }),
     h('button', { class: 'act', text: 'ALT', title: 'alternatives & privacy reroutes', onclick: () => toggleAlt(extra, it) }),
     h('button', { class: 'act', text: 'SHOT', title: 'screenshot it into the synth (opt-in thum.io)', onclick: () => shoot(it.url, it.host) }),
     it.thumb && !it.nocors ? h('button', { class: 'act', text: 'FEED', title: 'send the image to the synth', onclick: () => feedThumb(thumb, it) }) : null,
@@ -269,9 +277,18 @@ function card(it) {
     it.discuss ? h('a', { href: it.discuss, class: 'act', text: 'TALK' }) : null);
   c.append(
     h('div', { class: 'meta' }, h('span', { class: 'badge', text: it.src }), h('span', { class: 'host', text: it.host })),
-    h('h3', {}, h('a', { href: it.url, text: it.title })),
+    h('h3', {}, h('a', { href: it.url, text: it.title, onclick: (e) => { if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey) { e.preventDefault(); it.video || it.ia ? playItem(it) : browser.open(it.url); } } })),
     it.snippet ? h('p', { class: 'snip', text: it.snippet }) : null, acts, extra);
   return c;
+}
+
+async function playItem(it) {
+  if (it.video) return deck.play(it.video, it.title, { autoFeed: true });
+  if (it.ia) {
+    toast('finding the film file…');
+    try { const url = await S.archiveVideoFile(it.ia); if (url) deck.play(url, it.title, { nocors: true }); else toast('no playable file in this item'); }
+    catch { toast('archive lookup failed'); }
+  }
 }
 
 function feedThumb(img, it) {
@@ -324,7 +341,9 @@ function renderUrlTools(q) {
     out,
     h('div', { class: 'acts' },
       h('button', { class: 'act', text: 'COPY CLEAN', onclick: () => navigator.clipboard.writeText(c.url).then(() => toast('clean link copied'), () => toast('copy blocked')) }),
-      h('a', { href: c.url, class: 'act', text: 'OPEN CLEAN' }),
+      h('button', { class: 'act', text: 'BROWSE CLEAN', onclick: () => browser.open(c.url) }),
+      /\.(mp4|webm|ogv|mov|m4v)(\?|$)/i.test(c.url) ? h('button', { class: 'act hotact', text: '▶ PLAY IN DECK', onclick: () => deck.play(c.url, c.host, { autoFeed: true }) }) : null,
+      h('a', { href: c.url, class: 'act', text: 'OPEN CLEAN ↗' }),
       h('button', { class: 'act', text: 'SHOT → SYNTH', onclick: () => shoot(c.url, c.host) })),
     h('div', { class: 'routes' }, h('b', { text: 'REROUTE → ' }), reroute(c.u).map(([n, l]) => h('a', { href: l, class: 'chip', text: n })))));
   altsForHost(c.host).slice(0, 3).forEach(e => b.append(altCard(e)));
@@ -418,15 +437,21 @@ function fmt(p, v) { if (p[7]) return p[7][Math.round(v)] || v; if (p[1] === 'la
 function syncSliders() { if (!synth) return; for (const id in sliders) { const s = sliders[id]; s.inp.value = synth.params[id]; s.out.textContent = fmt(s.p, synth.params[id]); } }
 
 const PRESETS = {
-  'CLEAN READ': { feedback: .3, glitch: 0, palette: 0, warp: 0, slices: 1, jitter: 0, chaosSrc: 0, kaleido: 0, loopMix: 0, strobe: 0, xfade: .2, blend: 0, sat: 1, chroma: .002, pixel: 0, posterize: 0, invert: 0, mirror: 0, displace: 0, hueSpeed: 0, grain: .04, scan: .1, fbZoom: 0, fbRot: 0, fbHue: 0 },
-  'CUT-UP': { slices: 14, sliceMode: 0, shuffle: 4, jitter: .5, chaosSrc: .85, blend: 0, xfade: .5, feedback: .35, kaleido: 0, glitch: .2 },
-  'ACID WASH': { palette: .85, hueSpeed: .6, warp: .05, warpFreq: 4, feedback: .88, fbHue: .03, sat: 2.2, blend: 7, fbZoom: .01 },
-  'TUNNEL': { feedback: .94, fbZoom: .03, fbRot: .015, kaleido: 0, blend: 4, slices: 3, sliceMode: 3, jitter: .1 },
-  'KALEIDO WALL': { kaleido: 8, kaleRot: .3, mirror: 0, slices: 6, sliceMode: 4, palette: .45, feedback: .6 },
-  'SLIT-SCAN': { sliceTime: 1, slices: 48, sliceMode: 0, loopMix: 1, jitter: 0, chaosSrc: 0, kaleido: 0 },
-  'DATAMOSH': { glitch: .85, chroma: .02, displace: .35, pixel: .35, posterize: .5, shuffle: 10, sliceMode: 2, slices: 16, feedback: .7 },
-  'SHARDS': { sliceMode: 5, slices: 10, jitter: .4, chaosSrc: .6, blend: 3, shuffle: 2 },
-  'VOID': { invert: 1, posterize: .8, sat: 0, feedback: .9, grain: .3, scan: .8, palette: 0 },
+  'CLEAN READ': { space: 0, feedback: .3, glitch: 0, palette: 0, warp: 0, slices: 1, jitter: 0, chaosSrc: 0, kaleido: 0, loopMix: 0, strobe: 0, xfade: .2, blend: 0, sat: 1, chroma: .002, pixel: 0, posterize: 0, invert: 0, mirror: 0, displace: 0, hueSpeed: 0, grain: .04, scan: .1, fbZoom: 0, fbRot: 0, fbHue: 0 },
+  'CUT-UP': { space: 0, slices: 14, sliceMode: 0, shuffle: 4, jitter: .5, chaosSrc: .85, blend: 0, xfade: .5, feedback: .35, kaleido: 0, glitch: .2 },
+  'ACID WASH': { space: 0, palette: .85, hueSpeed: .6, warp: .05, warpFreq: 4, feedback: .88, fbHue: .03, sat: 2.2, blend: 7, fbZoom: .01 },
+  'TUNNEL': { space: 0, feedback: .94, fbZoom: .03, fbRot: .015, kaleido: 0, blend: 4, slices: 3, sliceMode: 3, jitter: .1 },
+  'KALEIDO WALL': { space: 0, kaleido: 8, kaleRot: .3, mirror: 0, slices: 6, sliceMode: 4, palette: .45, feedback: .6 },
+  'SLIT-SCAN': { space: 0, sliceTime: 1, slices: 48, sliceMode: 0, loopMix: 1, jitter: 0, chaosSrc: 0, kaleido: 0 },
+  'DATAMOSH': { space: 0, glitch: .85, chroma: .02, displace: .35, pixel: .35, posterize: .5, shuffle: 10, sliceMode: 2, slices: 16, feedback: .7 },
+  'SHARDS': { space: 0, sliceMode: 5, slices: 10, jitter: .4, chaosSrc: .6, blend: 3, shuffle: 2 },
+  '3D WORMHOLE': { space: 1, spaceMix: 1, spaceFb: 0, camSpeed: 1.2, twist: .6, fov: 1, fog: .3, depth: 1, feedback: .6, chaosSrc: .5 },
+  '3D TERRAIN': { space: 2, spaceMix: 1, spaceFb: 0, camSpeed: .6, depth: 1.3, fog: .35, fov: 1.1, palette: .5, feedback: .5 },
+  '3D ORB': { space: 3, spaceMix: 1, spaceFb: 0, camSpeed: .5, depth: 1.4, twist: .8, fov: 1, kaleido: 0 },
+  'CUBE CITY': { space: 4, spaceMix: 1, spaceFb: 0, camSpeed: 1, depth: 1, fog: .4, twist: .3, fov: 1 },
+  'FRACTAL TEMPLE': { space: 5, spaceMix: 1, spaceFb: 0, camSpeed: .4, depth: .9, fog: .3, fov: 1, palette: .6 },
+  'HYPERSPACE ∞': { space: 1, spaceMix: 1, spaceFb: 1, feedback: .85, fbZoom: .02, camSpeed: 2, twist: 1, kaleido: 6, palette: .7 },
+  'VOID': { space: 0, invert: 1, posterize: .8, sat: 0, feedback: .9, grain: .3, scan: .8, palette: 0 },
 };
 function applyPreset(name) {
   if (!synth) return;
@@ -455,6 +480,13 @@ function randomValue(p) {
     case 'fbZoom': v = rand(-.02, .03); break;
     case 'fbRot': v = rand(-.02, .02); break;
     case 'sat': v = rand(.6, 2.4); break;
+    case 'space': v = Math.random() < .45 ? randInt(1, 5) : 0; break;
+    case 'spaceFb': v = Math.random() < .2 ? 1 : 0; break;
+    case 'camSpeed': v = rand(-1.5, 1.5); break;
+    case 'fov': v = rand(.6, 1.8); break;
+    case 'depth': v = rand(.2, 1.6); break;
+    case 'fog': v = rand(0, .6); break;
+    case 'spaceMix': v = rand(.6, 1); break;
     case 'audioAmt': return synth.params.audioAmt;
     case 'loopMix': return synth.loopFrames ? rand(0, 1) : synth.params.loopMix;
     default: v = rand(min, max);
@@ -485,6 +517,22 @@ function startLoop() {
 }
 
 // ---------------------------------------------------------------- capture / files
+// live-capture one element of this page (browser frame, video player) into the synth.
+// Chrome crops to the element via Region Capture; elsewhere you get the whole tab (instant hall of mirrors).
+async function captureElement(el, name) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) return toast('screen capture not supported on this device');
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false, preferCurrentTab: true, selfBrowserSurface: 'include' });
+    const [track] = stream.getVideoTracks();
+    let cropped = false;
+    if (window.CropTarget && track.cropTo) { try { await track.cropTo(await CropTarget.fromElement(el)); cropped = true; } catch { } }
+    const v = await videoFrom(stream);
+    const i = feed(v, name.toUpperCase().slice(0, 16), { live: true, stop: () => stream.getTracks().forEach(t => t.stop()), toB: true, kind: 'video' });
+    track.addEventListener('ended', () => { if (synth.sources[i]) synth.sources[i].live = false; updatePreview(i); });
+    toast(cropped ? 'LIVE: ' + name + ' → slot ' + (i + 1) : 'pick THIS tab — your browser captures the whole tab (feedback heaven)', 5000);
+  } catch { toast('capture cancelled'); }
+}
+
 async function captureTab() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) return toast('screen capture not supported on this device');
   try {
@@ -605,7 +653,14 @@ function panic() {
 // ---------------------------------------------------------------- modes / wiring
 function setMode(m) {
   state.mode = m;
-  document.querySelectorAll('#modes .mode').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  document.querySelectorAll('#modes .mode[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+}
+
+function toggleBrowser() {
+  if (!browser.el.hidden) return browser.close();
+  const q = input.value.trim();
+  if (q) browser.go(q); else browser.open('https://marginalia-search.com/explore/random');
+  setTimeout(() => browser.addr.focus(), 50);
 }
 
 function toggleUI(force) { document.body.classList.toggle('hideui', force); }
@@ -614,7 +669,16 @@ function wire() {
   input.addEventListener('input', onType);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } if (e.key === 'Escape') input.blur(); });
   $('#go').addEventListener('click', submit);
-  document.querySelectorAll('#modes .mode').forEach(b => b.addEventListener('click', () => { setMode(b.dataset.mode); runSearch(true); if (synth) synth.burst(.5); }));
+  document.querySelectorAll('#modes .mode[data-mode]').forEach(b => b.addEventListener('click', () => { setMode(b.dataset.mode); runSearch(true); if (synth) synth.burst(.5); }));
+  $('#openBrowser').addEventListener('click', toggleBrowser);
+  $('#safeFilter').addEventListener('change', e => { state.filter = e.target.checked; toast(state.filter ? 'safe filter ON for images' : 'unfiltered'); });
+  results.addEventListener('pointermove', e => {
+    const c = e.target.closest('.card, .imgCard'); if (!c) return;
+    const r = c.getBoundingClientRect();
+    c.style.setProperty('--rx', ((e.clientY - r.top) / r.height - .5) * -16 + 'deg');
+    c.style.setProperty('--ry', ((e.clientX - r.left) / r.width - .5) * 16 + 'deg');
+  });
+  results.addEventListener('pointerout', e => { const c = e.target.closest('.card, .imgCard'); if (c && !c.contains(e.relatedTarget)) { c.style.removeProperty('--rx'); c.style.removeProperty('--ry'); } });
 
   $('#rackToggle').addEventListener('click', () => document.body.classList.toggle('rackOpen'));
   $('#bChaos').addEventListener('click', chaos);
@@ -665,6 +729,7 @@ function wire() {
     else if (k === 'd') toggleDerive();
     else if (k === 's') snap();
     else if (k === 'f') fullscreen();
+    else if (k === 'b') toggleBrowser();
     else if (k === ' ') { e.preventDefault(); synth && synth.burst(1.6); sound.noise(); }
     else if (k === '/') { e.preventDefault(); toggleUI(false); input.focus(); }
     else if (k === 'escape') { $('#log').hidden = true; toggleUI(false); }
@@ -707,7 +772,7 @@ function enter(calm) {
   document.body.classList.remove('booting');
   if (synth) {
     if (calm) Object.assign(synth.params, { strobe: 0, glitch: .05, chroma: .002, hueSpeed: .03, shuffle: .5, feedback: .5, jitter: .12 });
-    else { Object.assign(synth.params, { glitch: .3, chroma: .008, shuffle: 3, chaosSrc: .5, palette: .5 }); synth.burst(2); }
+    else { Object.assign(synth.params, { glitch: .3, chroma: .008, shuffle: 3, chaosSrc: .5, palette: .5, space: 1, spaceMix: .9, camSpeed: .8 }); synth.burst(2); }
     syncSliders(); markAB();
   }
   if (!calm) sound.toggle() && $('#bSound').classList.add('on');
@@ -718,6 +783,9 @@ async function main() {
   bootSynth();
   buildBank();
   buildRack();
+  const deps = { feed, toast, captureElement, logRequest: S.logRequest, sound, playVideo: (u, t) => deck.play(u, t, { autoFeed: true }) };
+  browser = new GhostBrowser(deps);
+  deck = new VideoDeck(deps);
   wire();
   await fontsReady();
   if (synth) { seedSources(); markAB(); }
