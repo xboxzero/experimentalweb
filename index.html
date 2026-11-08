@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: mediastream:; connect-src 'self' https://*.wikipedia.org https://commons.wikimedia.org https://hn.algolia.com https://api.openverse.org https://archive.org https://api.duckduckgo.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'">
+<meta name="robots" content="noindex">
+<meta name="description" content="GH0ST//SEEK — an experimental anti-surveillance search engine that finds alternative sites and turns the web into a psychedelic visual synthesizer.">
+<meta name="theme-color" content="#000000">
+<title>GH0ST//SEEK — anti-surveillance search synth</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/SedgwickAveDisplay-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/style.css">
+<script type="module" src="js/app.js"></script>
+</head>
+<body class="booting">
+<canvas id="synth" aria-hidden="true"></canvas>
+
+<!-- photosensitivity gate (also unlocks audio) -->
+<div id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+  <div class="gateInner">
+    <h2 id="gateTitle" class="drip">⚠ WARNING ⚠</h2>
+    <p>This page flashes, strobes and melts. If you are sensitive to flashing lights, choose <b>CALM</b>.</p>
+    <p class="small">No cookies. No analytics. No storage. No server. Your queries go straight from your browser to open APIs with the referrer stripped — every request is shown in the 🛡 log.</p>
+    <div class="gateBtns">
+      <button id="enterCalm" class="btn sticker">ENTER · CALM</button>
+      <button id="enterHard" class="btn sticker hot">ENTER · HARDCORE</button>
+    </div>
+  </div>
+</div>
+
+<div id="ui">
+  <header id="top">
+    <h1 id="logo" data-text="GH0ST//SEEK"><span class="g1">GH0ST</span><span class="g2">//</span><span class="g3">SEEK</span></h1>
+    <p class="tagline"><span>the search engine that forgets you</span> <span class="hl">cut · mix · loop · hallucinate</span></p>
+    <button id="shieldBtn" class="shield" title="What did this page send, and to whom?">🛡 <b id="reqCount">0</b> requests · 0 trackers</button>
+  </header>
+
+  <section id="searchZone">
+    <div class="spraybox">
+      <input id="q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"
+        placeholder="spray a query, paste a URL, or !bang…" aria-label="Search">
+      <button id="go" class="btn">SPRAY</button>
+    </div>
+    <nav id="modes" aria-label="Search mode">
+      <button data-mode="all" class="mode on">WEB</button>
+      <button data-mode="alt" class="mode">ALT SITES</button>
+      <button data-mode="img" class="mode">IMAGES</button>
+      <button data-mode="archive" class="mode">ARCHIVE</button>
+      <button data-mode="hn" class="mode">LINKS</button>
+      <button data-mode="engines" class="mode">ESCAPE TO…</button>
+      <button data-mode="me" class="mode">WHAT THEY SEE</button>
+    </nav>
+    <div id="engineBar" aria-label="Open this query elsewhere"></div>
+  </section>
+
+  <div id="status" aria-live="polite"></div>
+  <main id="results"></main>
+
+  <footer id="foot">
+    <p>GH0ST//SEEK is a static page on GitHub Pages. It has no backend, sets no cookies and stores nothing. Results come live from
+      Wikipedia, Wikimedia Commons, DuckDuckGo instant answers, the HN Algolia index, Openverse and the Internet Archive. Screenshots via thum.io are opt-in per session.
+      Keys: <kbd>H</kbd> hide UI · <kbd>C</kbd> chaos · <kbd>R</kbd> record loop · <kbd>Space</kbd> burst · <kbd>1-8</kbd> source A · <kbd>⇧1-8</kbd> source B · <kbd>A</kbd> autopilot · <kbd>D</kbd> dérive · <kbd>S</kbd> snapshot · <kbd>F</kbd> fullscreen · <kbd>/</kbd> search</p>
+  </footer>
+</div>
+
+<aside id="rack" aria-label="Visual synthesizer">
+  <div class="rackHead">
+    <button id="rackToggle" class="btn tape">SYNTH RACK <span>▲</span></button>
+    <div class="transport">
+      <button id="bChaos" class="btn" title="randomise everything (C)">CHAOS</button>
+      <button id="bAuto" class="btn" title="parameters drift on their own (A)">AUTOPILOT</button>
+      <button id="bDerive" class="btn" title="the page searches by itself — situationist drift (D)">DÉRIVE</button>
+      <button id="bLoop" class="btn" title="record the output into a loop (R)">● LOOP</button>
+      <button id="bBurst" class="btn" title="glitch burst (Space)">BURST</button>
+      <button id="bSnap" class="btn" title="save PNG (S)">SNAP</button>
+      <button id="bVid" class="btn" title="record webm video">REC VIDEO</button>
+      <button id="bSound" class="btn" title="drone + typing notes">SOUND</button>
+      <button id="bMic" class="btn" title="mic drives the visuals">MIC</button>
+      <button id="bMidi" class="btn" title="Web MIDI controller, click a slider then move a knob to learn">MIDI</button>
+      <button id="bHide" class="btn" title="hide interface (H)">HIDE UI</button>
+      <button id="bFull" class="btn" title="fullscreen (F)">FULL</button>
+    </div>
+  </div>
+  <div class="rackBody">
+    <div class="block bankBlock">
+      <h3>SOURCE BANK <small>click = A · shift/right-click = B · drop/paste images here</small></h3>
+      <div id="bank"></div>
+      <div class="feedBtns">
+        <button id="fTab" class="btn small" title="live screenshot of any tab, window or screen">CAPTURE TAB / SCREEN</button>
+        <button id="fCam" class="btn small">WEBCAM</button>
+        <button id="fFile" class="btn small">FILE</button>
+        <button id="fSelf" class="btn small" title="feed the output back in as a source">SELF ∞</button>
+        <button id="fTag" class="btn small">RESPRAY TAG</button>
+        <button id="fNoise" class="btn small">NOISE</button>
+      </div>
+    </div>
+    <div class="block presetBlock">
+      <h3>PRESETS</h3>
+      <div id="presets"></div>
+      <h3>LOOP</h3>
+      <div class="loopRow">
+        <label>FRAMES <select id="loopLen"><option>8</option><option>16</option><option selected>24</option><option>32</option><option>48</option></select></label>
+        <div id="loopModes"><button data-lm="fwd" class="btn small on">→</button><button data-lm="rev" class="btn small">←</button><button data-lm="pong" class="btn small">↔</button><button data-lm="stut" class="btn small">⚡</button></div>
+        <button id="bLoopClear" class="btn small">CLEAR</button>
+      </div>
+      <h3>ENGINE</h3>
+      <div class="loopRow">
+        <label>QUALITY <select id="quality"><option value="0.5">LO</option><option value="0.75" selected>MID</option><option value="1">HI</option></select></label>
+        <label>UI ALPHA <input id="uiAlpha" type="range" min="0.15" max="1" step="0.01" value="0.92"></label>
+        <label class="chk"><input id="autoFeed" type="checkbox" checked> AUTO-FEED RESULTS</label>
+      </div>
+    </div>
+    <div id="groups"></div>
+  </div>
+</aside>
+
+<div id="log" class="panel" hidden>
+  <div class="panelHead"><h2 class="drip">SURVEILLANCE REPORT</h2><button id="logClose" class="btn small">CLOSE</button></div>
+  <div class="facts" id="facts"></div>
+  <h3>EVERY REQUEST THIS PAGE MADE</h3>
+  <ol id="logList"></ol>
+  <div class="panelFoot">
+    <button id="panic" class="btn hot">☠ PANIC — WIPE EVERYTHING</button>
+    <button id="logToSynth" class="btn small">FEED LOG TO SYNTH</button>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+<input type="file" id="file" accept="image/*,video/*" multiple hidden>
+</body>
+</html>
