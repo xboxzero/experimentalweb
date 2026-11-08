@@ -42,6 +42,10 @@ You type, it searches in real time, sprays your query as graffiti, screenshots t
 - CHAOS, AUTOPILOT, **DÉRIVE** (the page searches random corners of Wikipedia by itself), presets,
   drone + typing sounds, mic-reactive, Web MIDI (CC map + learn), PNG snapshots and WebM recording.
 
+**Engines:** the GPU engine needs WebGL2. If it's switched off (LibreWolf, Mullvad/Tor Browser, hardware acceleration off)
+or a shader fails on your GPU, the page falls back to the **LITE engine** (plain Canvas 2D, same controls, fake 3D) and tells you why.
+Force it with `#lite` or the ENGINE selector in the rack. The 🛡 report shows which engine is running.
+
 Keys: `H` hide UI · `C` chaos · `R` loop · `Space` burst · `1-8` / `⇧1-8` sources · `A` autopilot · `D` dérive · `S` snap · `F` fullscreen · `/` search.
 
 ## Deploy

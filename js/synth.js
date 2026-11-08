@@ -347,7 +347,7 @@ export class Synth {
   constructor(canvas) {
     this.canvas = canvas;
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
-    if (!gl) throw new Error('WebGL2 not available');
+    if (!gl) throw Object.assign(new Error('WebGL2 is switched off or unsupported in this browser'), { noGL: true });
     this.gl = gl;
     this.params = {};
     for (const p of PARAMS) this.params[p[1]] = p[6];
@@ -362,7 +362,8 @@ export class Synth {
 
     this.main = program(gl, MAIN);
     this.post = program(gl, POST);
-    this.space = program(gl, SPACE);
+    try { this.space = program(gl, SPACE); } catch (e) { this.space = null; this.spaceError = String(e.message || e).slice(0, 200); }
+    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.lost = true; if (this.onLost) this.onLost(); });
     this.camT = 0;
     this.spaceTex = gl.createTexture(); this.spaceFbo = gl.createFramebuffer();
     this.vao = gl.createVertexArray();
@@ -467,6 +468,7 @@ export class Synth {
   _set1(prog, name, v) { const l = prog.u[name]; if (l) this.gl.uniform1f(l, v); }
 
   frame(dt) {
+    if (this.lost) return;
     const gl = this.gl, P = this.params;
     this.time += dt;
     this.burstV *= Math.pow(0.04, dt);
@@ -513,7 +515,7 @@ export class Synth {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     // 3D stage
-    const in3D = P.space >= 0.5;
+    const in3D = P.space >= 0.5 && !!this.space;
     if (in3D) {
       this.camT += dt * P.camSpeed * (1 + this.audio * P.audioAmt);
       const sp = this.space;

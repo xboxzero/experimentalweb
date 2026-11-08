@@ -1,4 +1,5 @@
 // GH0ST//SEEK — glue: search UI, alternative finder, source bank, synth rack, privacy panel.
+import { Synth2D } from './synth2d.js';
 import { Synth, PARAMS, SRC_LAYERS, SRC_W, SRC_H } from './synth.js';
 import * as S from './search.js';
 import { ALTS, findAlts, looksLikeUrl, cleanUrl, reroute, altsForHost } from './alts.js';
@@ -43,9 +44,26 @@ const tagCanvas = makeCanvas(), serpCanvas = makeCanvas();
 const slotNames = new Array(SRC_LAYERS).fill('');
 const previews = [];
 
+// GPU engine first; if WebGL2 is off/missing or a shader fails on this GPU, fall back to the LITE (Canvas 2D) engine.
 function bootSynth() {
-  try { synth = new Synth($('#synth')); }
-  catch (e) { document.body.classList.add('nogl'); toast('WebGL2 unavailable — synth disabled, search still works', 5000); return; }
+  const wantLite = /(^|[#&])lite\b/.test(location.hash);
+  let reason = '';
+  if (!wantLite) {
+    try { synth = new Synth($('#synth')); }
+    catch (e) { reason = e.noGL ? 'WebGL2 is off or unsupported here' : 'GPU shader failed: ' + String(e.message || e).split('\n')[0].slice(0, 120); console.warn('[gh0st] GPU engine failed:', e); }
+  }
+  if (!synth) {
+    const old = $('#synth'), fresh = old.cloneNode(false); old.replaceWith(fresh); // a canvas can only ever hold one context type
+    try { synth = new Synth2D(fresh); }
+    catch (e) { document.body.classList.add('nogl'); toast('no canvas available — synth disabled, search still works', 5000); return; }
+    document.body.classList.add('lite');
+    state.engineNote = wantLite ? 'LITE engine (chosen)' : 'LITE engine — ' + reason + '. Enable hardware acceleration / WebGL for the full GPU synth.';
+    setTimeout(() => toast(state.engineNote, 7000), 1200);
+  } else if (synth.spaceError) {
+    state.engineNote = 'GPU engine on, but the 3D shader failed on this GPU (3D worlds off): ' + synth.spaceError;
+    setTimeout(() => toast('3D worlds unavailable on this GPU — everything else works', 6000), 1200);
+  } else state.engineNote = 'GPU engine (WebGL2)';
+  if (synth.onLost !== undefined || !synth.lite) synth.onLost = () => toast('GPU context lost — reload the page to restart the synth', 8000);
   synth.onLoopDone = () => { $('#bLoop').classList.remove('rec'); $('#bLoop').textContent = '● LOOP'; toast('LOOP CAPTURED · ' + synth.loopFrames + ' frames — try TIME SMEAR'); };
 }
 
@@ -632,7 +650,7 @@ function refreshFacts() {
   $('#facts').replaceChildren(
     fact('COOKIES', document.cookie ? 'some (not ours!)' : 'NONE'), fact('STORAGE', ls ? ls + ' items' : 'NONE'),
     fact('3RD-PARTY SCRIPTS', String(third)), fact('ANALYTICS', 'NONE'), fact('REFERRER', 'STRIPPED'),
-    fact('SERVER', 'NONE (static page)'), fact('REQUESTS', String(S.requestLog.length)),
+    fact('SERVER', 'NONE (static page)'), fact('SYNTH ENGINE', state.engineNote || '—'), fact('REQUESTS', String(S.requestLog.length)),
     fact('HOSTS CONTACTED', Object.entries(hosts).map(([k, v]) => `${k} ×${v}`).join(' · ') || 'none yet'));
   $('#logList').replaceChildren(...S.requestLog.slice().reverse().map(r => h('li', {}, h('time', { text: r.t.toTimeString().slice(0, 8) }), h('b', { text: r.host }), h('span', { text: r.purpose + (r.detail ? ' · “' + r.detail + '”' : '') }))));
 }
@@ -705,6 +723,8 @@ function wire() {
     if (synth) synth.loopMode = b.dataset.lm; document.querySelectorAll('#loopModes button').forEach(x => x.classList.toggle('on', x === b));
   }));
   $('#quality').addEventListener('change', e => synth && synth.setScale(+e.target.value));
+  $('#engineSel').value = synth && synth.lite ? 'lite' : 'gpu';
+  $('#engineSel').addEventListener('change', e => { location.hash = e.target.value === 'lite' ? 'lite' : ''; location.reload(); });
   $('#uiAlpha').addEventListener('input', e => document.documentElement.style.setProperty('--ui-alpha', e.target.value));
   $('#autoFeed').addEventListener('change', e => state.autoFeed = e.target.checked);
 
